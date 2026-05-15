@@ -1,0 +1,219 @@
+# ================================================================
+#  HOME ASSISTANT — Automatizaciones de Alarma
+#  Archivo: home_assistant/automations.yaml
+#
+#  Incluir en configuration.yaml:
+#    automation: !include automations.yaml
+#  O copiar cada bloque al editor de automatizaciones de HA.
+# ================================================================
+
+# ----------------------------------------------------------------
+#  NOTIFICACIONES TELEGRAM
+# ----------------------------------------------------------------
+
+- id: alarma_intrusion
+  alias: "Alarma — Intrusión detectada"
+  description: "Notifica por Telegram cuando se dispara la alarma"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/alerta
+      payload: "INTRUSION_DETECTADA"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: >
+          🚨 *ALARMA DISPARADA*
+          Zona: {{ states('sensor.alarma_zona_disparada') }}
+          Hora: {{ now().strftime('%d/%m/%Y %H:%M:%S') }}
+    # Foto de cámara si hay integrada (opcional — comentar si no aplica)
+    # - service: notify.telegram_alarma
+    #   data:
+    #     message: "Foto de la cámara:"
+    #     data:
+    #       photo:
+    #         - url: !secret camara_url
+
+- id: alarma_armada_total
+  alias: "Alarma — Armada total"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/estado
+      payload: "ARMED_AWAY"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "🔒 Alarma *ARMADA TOTAL* — {{ now().strftime('%H:%M') }}"
+
+- id: alarma_armada_parcial
+  alias: "Alarma — Armada parcial (en casa)"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/estado
+      payload: "ARMED_HOME"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "🔒 Alarma *ARMADA PARCIAL* — {{ now().strftime('%H:%M') }}"
+
+- id: alarma_desarmada
+  alias: "Alarma — Desarmada"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/estado
+      payload: "DISARMED"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "🔓 Alarma *DESARMADA* — {{ now().strftime('%H:%M') }}"
+
+- id: alarma_falla_alimentacion
+  alias: "Alarma — Falla alimentación 220V"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/evento
+      payload: "FALLA_ALIMENTACION"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: >
+          ⚡ *FALLA ALIMENTACIÓN 220V*
+          La alarma está corriendo con batería.
+          Hora: {{ now().strftime('%H:%M') }}
+
+- id: alarma_alimentacion_restaurada
+  alias: "Alarma — Alimentación restaurada"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/evento
+      payload: "ALIM_RESTAURADA"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "✅ Alimentación 220V restaurada — {{ now().strftime('%H:%M') }}"
+
+- id: alarma_sabotaje
+  alias: "Alarma — Sabotaje de caja"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/evento
+      payload: "SABOTAJE_CAJA"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: >
+          ⚠️ *SABOTAJE DETECTADO*
+          La tapa de la caja de alarma fue abierta.
+          Hora: {{ now().strftime('%H:%M') }}
+
+- id: alarma_pin_incorrecto
+  alias: "Alarma — PIN incorrecto"
+  trigger:
+    - platform: mqtt
+      topic: alarma/central/evento
+      payload: "PIN_INCORRECTO"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "⚠️ PIN incorrecto ingresado — {{ now().strftime('%H:%M') }}"
+
+- id: alarma_teclado_offline
+  alias: "Alarma — Teclado offline"
+  description: "Avisa si el teclado no manda heartbeat en 2 minutos"
+  trigger:
+    - platform: mqtt
+      topic: alarma/teclado/status
+      payload: "offline"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "📵 Teclado de alarma *offline* — {{ now().strftime('%H:%M') }}"
+
+- id: alarma_central_offline
+  alias: "Alarma — Central offline"
+  trigger:
+    - platform: mqtt
+      topic: alarma/status
+      payload: "offline"
+  action:
+    - service: notify.telegram_alarma
+      data:
+        message: "🔴 Central de alarma *offline* — {{ now().strftime('%H:%M') }}"
+
+# ----------------------------------------------------------------
+#  CONTROL DESDE TELEGRAM
+#  Requiere: telegram_bot configurado con webhook o polling
+# ----------------------------------------------------------------
+
+- id: alarma_telegram_comando
+  alias: "Alarma — Comando desde Telegram"
+  description: "Permite armar/desarmar desde Telegram con /alarma_arm, /alarma_home, /alarma_off"
+  trigger:
+    - platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/alarma_arm"
+    - platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/alarma_home"
+    - platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/alarma_off"
+    - platform: event
+      event_type: telegram_command
+      event_data:
+        command: "/alarma_estado"
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.event.data.command == '/alarma_arm' }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: "alarma/ha/comando"
+                payload: "ARM_AWAY"
+            - service: notify.telegram_alarma
+              data:
+                message: "✅ Comando ARM_AWAY enviado"
+
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.event.data.command == '/alarma_home' }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: "alarma/ha/comando"
+                payload: "ARM_HOME"
+            - service: notify.telegram_alarma
+              data:
+                message: "✅ Comando ARM_HOME enviado"
+
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.event.data.command == '/alarma_off' }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: "alarma/ha/comando"
+                payload: "DISARM"
+            - service: notify.telegram_alarma
+              data:
+                message: "✅ Comando DISARM enviado"
+
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.event.data.command == '/alarma_estado' }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: "alarma/ha/comando"
+                payload: "GET_STATE"
+            - service: notify.telegram_alarma
+              data:
+                message: >
+                  📊 *Estado actual:*
+                  Panel: {{ states('sensor.alarma_estado') }}
+                  Zona disparada: {{ states('sensor.alarma_zona_disparada') }}
+                  Alimentación 220V: {{ states('binary_sensor.alarma_alimentacion_220v') }}
