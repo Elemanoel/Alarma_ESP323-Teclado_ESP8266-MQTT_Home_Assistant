@@ -1,0 +1,246 @@
+# ================================================================
+#  HOME ASSISTANT — Configuración MQTT + Sensores
+#  Archivo: home_assistant/configuration_snippet.yaml
+#
+#  Pegar estos bloques en el configuration.yaml de HA
+#  (o en archivos separados si usás !include)
+# ================================================================
+
+# ----------------------------------------------------------------
+#  TELEGRAM BOT
+#  Obtener token: hablar con @BotFather en Telegram → /newbot
+#  Obtener chat_id: hablar con @userinfobot
+# ----------------------------------------------------------------
+telegram_bot:
+  - platform: polling
+    api_key: !secret telegram_token
+    allowed_chat_ids:
+      - !secret telegram_chat_id
+
+notify:
+  - platform: telegram
+    name: telegram_alarma
+    chat_id: !secret telegram_chat_id
+
+# ----------------------------------------------------------------
+#  SENSORES MQTT
+#  Crean entidades en HA a partir de los topics de la central
+# ----------------------------------------------------------------
+mqtt:
+  sensor:
+    - name: "Alarma Estado"
+      unique_id: alarma_estado
+      state_topic: "alarma/central/estado"
+      icon: mdi:shield-home
+
+    - name: "Alarma Zona Disparada"
+      unique_id: alarma_zona_disparada
+      state_topic: "alarma/central/info"
+      value_template: "{{ value_json.zona_disparada }}"
+      icon: mdi:crosshairs-gps
+
+    - name: "Alarma Info"
+      unique_id: alarma_info
+      state_topic: "alarma/central/info"
+      icon: mdi:information
+
+  binary_sensor:
+    - name: "Alarma Online"
+      unique_id: alarma_online
+      state_topic: "alarma/status"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+
+    - name: "Teclado Online"
+      unique_id: teclado_online
+      state_topic: "alarma/teclado/status"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+
+    - name: "Alimentación 220V"
+      unique_id: alarma_alim_220v
+      state_topic: "alarma/central/info"
+      value_template: "{{ value_json.alim_220v }}"
+      payload_on: "true"
+      payload_off: "false"
+      device_class: power
+
+    - name: "Sirena Activa"
+      unique_id: alarma_sirena
+      state_topic: "alarma/central/info"
+      value_template: "{{ value_json.sirena }}"
+      payload_on: "true"
+      payload_off: "false"
+      device_class: sound
+
+    # Zonas individuales
+    - name: "Z1 Puerta Principal"
+      unique_id: zona_1
+      state_topic: "alarma/zona/1"
+      payload_on: "ABIERTA"
+      payload_off: "CERRADA"
+      device_class: door
+
+    - name: "Z2 Movimiento"
+      unique_id: zona_2
+      state_topic: "alarma/zona/2"
+      payload_on: "ABIERTA"
+      payload_off: "CERRADA"
+      device_class: motion
+
+    - name: "Z3 Cerramientos"
+      unique_id: zona_3
+      state_topic: "alarma/zona/3"
+      payload_on: "ABIERTA"
+      payload_off: "CERRADA"
+      device_class: door
+
+    - name: "Z4 Ventana Patio"
+      unique_id: zona_4
+      state_topic: "alarma/zona/4"
+      payload_on: "ABIERTA"
+      payload_off: "CERRADA"
+      device_class: window
+
+    - name: "Z5 Planta Alta"
+      unique_id: zona_5
+      state_topic: "alarma/zona/5"
+      payload_on: "ABIERTA"
+      payload_off: "CERRADA"
+      device_class: motion
+
+  # Botones para armar/desarmar desde HA
+  button:
+    - name: "Alarma Armar Total"
+      unique_id: alarma_btn_arm_away
+      command_topic: "alarma/ha/comando"
+      payload_press: "ARM_AWAY"
+      icon: mdi:shield-lock
+
+    - name: "Alarma Armar Parcial"
+      unique_id: alarma_btn_arm_home
+      command_topic: "alarma/ha/comando"
+      payload_press: "ARM_HOME"
+      icon: mdi:shield-half-full
+
+    - name: "Alarma Desarmar"
+      unique_id: alarma_btn_disarm
+      command_topic: "alarma/ha/comando"
+      payload_press: "DISARM"
+      icon: mdi:shield-off
+
+# ----------------------------------------------------------------
+#  SECRETS  (agregar a secrets.yaml de HA)
+# ----------------------------------------------------------------
+# telegram_token: "1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# telegram_chat_id: 123456789
+
+---
+# ================================================================
+#  DASHBOARD LOVELACE
+#  Archivo: home_assistant/lovelace_dashboard.yaml
+#
+#  En HA: Ajustes → Dashboards → Agregar dashboard → YAML mode
+#  O pegar en ui-lovelace.yaml si usás configuración manual.
+# ================================================================
+
+title: "Alarma Casa"
+views:
+  - title: "Alarma"
+    icon: mdi:shield-home
+    path: alarma
+    cards:
+
+      # ---- Estado principal ----
+      - type: custom:mushroom-alarm-control-panel-card
+        entity: sensor.alarma_estado
+        # Si no tenés Mushroom, usar la tarjeta estándar:
+        # type: entities
+        # entities:
+        #   - sensor.alarma_estado
+
+      # ---- Estado resumido ----
+      - type: entities
+        title: "Estado del Sistema"
+        show_header_toggle: false
+        entities:
+          - entity: sensor.alarma_estado
+            name: "Panel"
+            icon: mdi:shield-home
+          - entity: sensor.alarma_zona_disparada
+            name: "Zona Disparada"
+          - entity: binary_sensor.alarma_alim_220v
+            name: "Alimentación 220V"
+          - entity: binary_sensor.alarma_sirena
+            name: "Sirena"
+          - entity: binary_sensor.alarma_online
+            name: "Central Online"
+          - entity: binary_sensor.teclado_online
+            name: "Teclado Online"
+
+      # ---- Zonas ----
+      - type: entities
+        title: "Zonas"
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.z1_puerta_principal
+            name: "Z1 — Puerta Principal"
+            icon: mdi:door
+          - entity: binary_sensor.z2_movimiento
+            name: "Z2 — Movimiento / Cristales"
+            icon: mdi:motion-sensor
+          - entity: binary_sensor.z3_cerramientos
+            name: "Z3 — Cerramientos"
+            icon: mdi:gate
+          - entity: binary_sensor.z4_ventana_patio
+            name: "Z4 — Ventana Patio"
+            icon: mdi:window-open
+          - entity: binary_sensor.z5_planta_alta
+            name: "Z5 — Planta Alta"
+            icon: mdi:stairs-up
+
+      # ---- Controles rápidos ----
+      - type: horizontal-stack
+        cards:
+          - type: button
+            entity: button.alarma_armar_total
+            name: "Armar Total"
+            icon: mdi:shield-lock
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.alarma_armar_total
+          - type: button
+            entity: button.alarma_armar_parcial
+            name: "En Casa"
+            icon: mdi:shield-half-full
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.alarma_armar_parcial
+          - type: button
+            entity: button.alarma_desarmar
+            name: "Desarmar"
+            icon: mdi:shield-off
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.alarma_desarmar
+
+      # ---- Historial de eventos (log) ----
+      - type: logbook
+        title: "Historial"
+        hours_to_show: 24
+        entities:
+          - sensor.alarma_estado
+          - binary_sensor.z1_puerta_principal
+          - binary_sensor.z2_movimiento
+          - binary_sensor.z3_cerramientos
+          - binary_sensor.z4_ventana_patio
+          - binary_sensor.z5_planta_alta
+          - binary_sensor.alarma_alim_220v
